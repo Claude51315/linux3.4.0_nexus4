@@ -1,0 +1,5 @@
+config TRACEBIO
+    bool "Custom Trace utility"
+    default y
+    help
+    add instrument code to trace IO behavior
