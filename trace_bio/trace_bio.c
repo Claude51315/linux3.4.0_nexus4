@@ -987,6 +987,8 @@ void print_bio2(struct bio *print_bio)
     biovec = print_bio->bi_io_vec;
     bio_page = biovec->bv_page;
     pname = null;
+    vpp = NULL;
+    i = j = k = 0;
     /* get filename */
     if(bio_page && 
             bio_page->mapping && 
@@ -1025,20 +1027,23 @@ void print_bio2(struct bio *print_bio)
             printk("lzo&%d\n", compress_len);
 
             vpp = kmap_atomic(tmpvec->bv_page);
-            if(!vpp)
-                continue;
-            memcpy(tmp_buf, vpp, tmpvec->bv_len);
-            kunmap_atomic(vpp);
-
+            if(!vpp){
+                printk("map fail!");
+                return;
+            }
+                
             /* calculate partial sha*/ 
-            compute_sha((unsigned char*)tmp_buf + tmpvec->bv_offset, tmpvec->bv_len, (unsigned char*)fp[0]);
+            
+            compute_sha((unsigned char*)vpp + tmpvec->bv_offset, tmpvec->bv_len, (unsigned char*)fp[0]);
             fp[0][SHA1HashSize] = '\0';
+            
             for(j = 1 ; j <= NUM_PARTIAL_SHA ; j++)
             {
 
-                compute_sha((unsigned char*)tmp_buf + tmpvec->bv_offset + (tmpvec->bv_len >>2) * i, tmpvec->bv_len >>2, (unsigned char*)fp[i]);
-                fp[i][SHA1HashSize] = '\0';
+                compute_sha((unsigned char*)vpp + tmpvec->bv_offset + (tmpvec->bv_len >>2) * (j-1), tmpvec->bv_len >>2, (unsigned char*)fp[j]);
+                fp[j][SHA1HashSize] = '\0';
             }
+            
             for(j = 0 ; j <= NUM_PARTIAL_SHA; j++)
             {
                 for( k = 0 ; k < SHA1HashSize ; k++)
@@ -1046,8 +1051,10 @@ void print_bio2(struct bio *print_bio)
                 sha_buf[j][SHA1HashSize*2] = '\0';
             }
 
+            kunmap_atomic(vpp);
+            
         }
-        printk(KERN_DEBUG "sha_complete&%s&%s&%10llu\n", sha_buf[0], pname, print_bio->bi_sector);
+       printk(KERN_DEBUG "sha_complete&%s&%s&%10llu\n", sha_buf[0], pname, print_bio->bi_sector);
         for(i = 1 ; i <= NUM_PARTIAL_SHA; i++) {
             printk(KERN_DEBUG "sha_partial%d&%s&%s&%10llu\n",i, sha_buf[i], pname, print_bio->bi_sector);
         }
@@ -1062,7 +1069,46 @@ END:
     return;    
 }
 
-
+void get_filename(struct bio *print_bio, char *output)
+{
+    int i, j, k; 
+    struct bio_vec *biovec;
+    void *vpp;
+    struct page *bio_page;    
+    struct dentry *p;
+    unsigned char unknown[] = "unknown", null[]="NULL";
+    unsigned char *pname;
+    biovec = print_bio->bi_io_vec;
+    bio_page = biovec->bv_page;
+    pname = null;
+    vpp = NULL;
+    i = j = k = 0;
+    /* get filename */
+    if(bio_page && 
+            bio_page->mapping && 
+            ((unsigned long) bio_page->mapping & PAGE_MAPPING_ANON) == 0  && 
+            bio_page->mapping->host )
+    {
+        p = NULL ; 
+        if( !list_empty(&(bio_page->mapping->host->i_dentry)))
+            p = list_first_entry(&(bio_page->mapping->host->i_dentry), struct dentry, d_alias);
+        if(p != NULL ) {
+            pname = p->d_iname;
+            for(j = 0 ; j < strlen(p->d_iname); j++){
+                if( (p->d_iname[j]!= '\0')  &&  ( (p->d_iname[j] < 32) || (p->d_iname[j] > 126))){ 
+                    pname = unknown;
+                    break;
+                }
+            } 
+        }
+    }
+    if(pname != unknown &&  pname != null)
+    {
+        memcpy(output, pname, DNAME_INLINE_LEN);
+    }
+    
+    return;    
+}
 
 
 // print ext4 journal descriptor block 

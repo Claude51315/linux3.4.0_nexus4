@@ -188,6 +188,7 @@ void print_bio(struct bio *print_bio,int flag);
 void timespec_diff(struct timespec *start, struct timespec *stop, struct timespec *result);
 void init_bio_time(struct bio *bio);
 void print_bio2(struct bio *bio);
+void get_filename(struct bio *print_bio, char* output);
 ////////////////////////////////////////////////////////////
 int lzo_compress(struct page* p);
 

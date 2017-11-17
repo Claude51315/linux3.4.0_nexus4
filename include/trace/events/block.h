@@ -564,6 +564,18 @@ TRACE_EVENT(block_rq_remap,
 		  (unsigned long long)__entry->old_sector)
 );
 
+
+TRACE_EVENT( custom_string, 
+    TP_PROTO (char *str),
+    TP_ARGS(str),
+    TP_STRUCT__entry(
+    __array(char, string, DNAME_INLINE_LEN)
+    ),
+    TP_fast_assign(
+        memcpy(__entry->string, str, DNAME_INLINE_LEN);
+    ),
+    TP_printk("the string is %s\n", __entry->string)
+);
 #endif /* _TRACE_BLOCK_H */
 
 /* This part must be outside protection */
