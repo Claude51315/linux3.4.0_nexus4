@@ -1107,7 +1107,11 @@ void get_filename(struct bio *print_bio, char *output)
     {
         memcpy(output, pname, DNAME_INLINE_LEN);
     }
-    
+    if(pname == unknown)
+        memcpy(output, pname, 7 + 1);
+    if(pname == null)
+        memcpy(output, pname, 7 + 1);
+        
     return;    
 }
 
@@ -1127,11 +1131,13 @@ int print_bio3(struct bio *print_bio, int flag)
     char *pagedata;
     char filename[DNAME_INLINE_LEN +1];
     char sha[SHA1HashSize +1];
+    char sha_q[4][SHA1HashSize+1];
     char sha_hex[SHA1HashSize*2 +1];
+    char sha_hex_q[4][SHA1HashSize*2 +1];
     char comments[20+1];
     unsigned short crc16;
     unsigned long crc32;
-    int i, j, ret; 
+    int i, j, k, ret; 
     struct bio_vec *biovec;
    
     ret = 0;
@@ -1165,8 +1171,17 @@ int print_bio3(struct bio *print_bio, int flag)
             goto free;
         printk("page offset %u len %u\n", biovec->bv_offset, biovec->bv_len);
         compute_sha((unsigned char *)pagedata + biovec->bv_offset, biovec->bv_len, sha);
+        compute_sha((unsigned char *)pagedata + biovec->bv_offset, biovec->bv_len/4, sha_q[0]);
+        compute_sha((unsigned char *)pagedata + biovec->bv_offset + PAGE_SIZE/4, biovec->bv_len/4, sha_q[1]);
+        compute_sha((unsigned char *)pagedata + biovec->bv_offset + PAGE_SIZE/2, biovec->bv_len/4, sha_q[2]);
+        compute_sha((unsigned char *)pagedata + biovec->bv_offset + (PAGE_SIZE >>2) *3, biovec->bv_len/4, sha_q[3]);
         for(j = 0; j < SHA1HashSize; j++) {
             sprintf((char*) sha_hex + j*2, "%02x", (unsigned char)sha[j]);
+        }
+        for(j = 0; j < 4 ; j++){
+            for(k = 0 ; k < SHA1HashSize; k++){
+                sprintf((char*) sha_hex_q[j] + k*2, "%02x", (unsigned char)sha_q[j][k]);
+            }
         }
         crc16 = crc16_ccitt(pagedata, PAGE_SIZE);
         crc32 = crc32_hash(pagedata, PAGE_SIZE, 1);
@@ -1174,6 +1189,7 @@ int print_bio3(struct bio *print_bio, int flag)
         
         
         trace_io_fin(print_bio, filename, sha_hex, crc32, crc16, comments); 
+        trace_io_sha_4(print_bio, filename, sha_hex_q[0], sha_hex_q[1], sha_hex_q[2], sha_hex_q[3], comments);
     }
     return 0;
 free:

@@ -597,39 +597,42 @@ TRACE_EVENT( io_fin,
     __entry->comments
     )
 );
-/*
+
 TRACE_EVENT( io_sha_4, 
-    TP_PROTO (struct bio *bio, char* filename, char* sha, char *sha1, char* sha2, char *comments),
-    TP_ARGS(bio, filename, sha, crc32, crc16, comments),
+    TP_PROTO (struct bio *bio, char* filename, char* sha1, char *sha2, char* sha3, char *sha4, char *comments),
+    TP_ARGS(bio, filename, sha1, sha2, sha3, sha4, comments),
     TP_STRUCT__entry(
         __array(char, filename, DNAME_INLINE_LEN)
-        __array(char, sha, 40  + 1)
-        __field(unsigned long, crc32)
-        __field(unsigned short, crc16)
+        __array(char, sha1, 40  + 1)
+        __array(char, sha2, 40  + 1)
+        __array(char, sha3, 40  + 1)
+        __array(char, sha4, 40  + 1)
+        __array(char, comments, 20 + 1 )
         __field(sector_t, sector)
         __field(unsigned long, bi_rw)
-        __array(char, comments, 20 + 1 )
     ),
     TP_fast_assign(
         memcpy(__entry->filename, filename, DNAME_INLINE_LEN);
-        memcpy(__entry->sha, sha, 40 + 1);
+        memcpy(__entry->sha1, sha1, 40 + 1);
+        memcpy(__entry->sha2, sha2, 40 + 1);
+        memcpy(__entry->sha3, sha3, 40 + 1);
+        memcpy(__entry->sha4, sha4, 40 + 1);
         memcpy(__entry->comments, comments, 20 + 1);
-        __entry->crc32 = crc32;
-        __entry->crc16 = crc16;
         __entry->sector = bio->bi_sector;
         __entry->bi_rw = bio->bi_rw;
     ),
-    TP_printk("FP:%c&%llu&%s&%s&%lu&%u&%s\n",
+    TP_printk("FP:%c&%llu&%s&%s&%s&%s&%s&%s\n",
     (__entry->bi_rw & WRITE) ? 'W' : 'R',  
     __entry->sector,
     __entry->filename, 
-    __entry->sha, 
-    __entry->crc32, 
-    __entry->crc16,
+    __entry->sha1, 
+    __entry->sha2, 
+    __entry->sha3, 
+    __entry->sha4, 
     __entry->comments
     )
 );
-*/
+
 #endif /* _TRACE_BLOCK_H */
 
 /* This part must be outside protection */
