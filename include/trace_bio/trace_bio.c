@@ -1,4 +1,6 @@
 #include "trace_bio.h"
+
+#include <trace/events/block.h>
 int SHA1Reset(SHA1Context *context)
 {
     if (!context)
@@ -841,7 +843,6 @@ void print_bio(struct bio *print_bio, int flag)
     unsigned char unknown[] = "unknown";
     unsigned char *pname;
     int w_flag;
-    int compress_len = 0;
     for( i = 0 ; i < SHA1HashSize ; i++){
         fp[i] = 0;
     }
@@ -863,8 +864,6 @@ void print_bio(struct bio *print_bio, int flag)
                     index = index2++;
                 tmpvec = biovec + i ; 
                 j = 0 ;
-                compress_len = lzo_compress(tmpvec->bv_page);
-                printk("lzo&%d&%d\n", w_flag, compress_len);
                 vpp = kmap_atomic(tmpvec->bv_page);
                 if(vpp != NULL) {
 
@@ -927,6 +926,10 @@ void print_bio(struct bio *print_bio, int flag)
                         // printk(KERN_DEBUG "crc_r&%d&%lu&%lu&%lu\n",
                         // index,crc32_1,crc32_2, crc32_10);	
                     }
+                    if(flag == 2)
+                    printk(KERN_DEBUG "qqqiq&%10llu&%s&%s\n", 
+                                     print_bio->bi_sector, sha_buf, data_buf);
+                     
                     //bio_page = tmpvec->bv_page;
                     //if(bio_page != NULL){
                     //    print_page_inode(bio_page);    
@@ -979,7 +982,6 @@ void print_bio2(struct bio *print_bio)
     unsigned char unknown[] = "unknown", null[]="NULL";
     unsigned char *pname;
     int w_flag;
-    int compress_len = 0;
     for( i = 0 ; i <= NUM_PARTIAL_SHA ; i++){
         memset(fp[i], 0, SHA1HashSize +1 );
         memset(sha_buf[i], 0, SHA1HashSize*2+1);
@@ -1023,8 +1025,7 @@ void print_bio2(struct bio *print_bio)
             tmpvec = biovec + i;
             j = 0;
             /* compress */
-            compress_len = lzo_compress(tmpvec->bv_page);
-            printk("lzo&%d\n", compress_len);
+
 
             vpp = kmap_atomic(tmpvec->bv_page);
             if(!vpp){
@@ -1110,7 +1111,81 @@ void get_filename(struct bio *print_bio, char *output)
     return;    
 }
 
+int get_page_data(struct page *p, char *output)
+{
+    void *vpp = NULL;
+    vpp = kmap(p);
+    if(!vpp)
+        return -1;
+    memcpy(output, (char *)vpp, PAGE_SIZE);
+    kunmap(p);
+    vpp = NULL;
+    return 0;
+}
+int print_bio3(struct bio *print_bio, int flag)
+{
+    char *pagedata;
+    char filename[DNAME_INLINE_LEN +1];
+    char sha[SHA1HashSize +1];
+    char sha_hex[SHA1HashSize*2 +1];
+    char comments[20+1];
+    unsigned short crc16;
+    unsigned long crc32;
+    int i, j, ret; 
+    struct bio_vec *biovec;
+   
+    ret = 0;
+    memset(filename, '\0', sizeof(filename));
+    memset(sha, '\0', sizeof(sha));
+    memset(sha_hex, '\0', sizeof(sha_hex));
+    memset(comments, '\0', sizeof(comments));
+    
+    switch(flag){
+        case RAW_BIO:
+            sprintf(comments, "RAWBIO");
+        break;
+        case ENC_BIO:
+            sprintf(comments, "ENCBIO");
+        break;
+    
+    }
 
+    biovec = print_bio->bi_io_vec;
+    pagedata =(char*) kmalloc(PAGE_SIZE, GFP_KERNEL);
+    memset(pagedata, 0, PAGE_SIZE);
+    if(!pagedata || !biovec)
+        goto end;
+
+    for(i = 0 ; i < print_bio->bi_vcnt ; i++) { 
+        biovec = print_bio->bi_io_vec + i;
+        if(!biovec->bv_page)
+            goto free;
+        ret = get_page_data(biovec->bv_page, pagedata);
+        if(ret < 0)
+            goto free;
+        printk("page offset %u len %u\n", biovec->bv_offset, biovec->bv_len);
+        compute_sha((unsigned char *)pagedata + biovec->bv_offset, biovec->bv_len, sha);
+        for(j = 0; j < SHA1HashSize; j++) {
+            sprintf((char*) sha_hex + j*2, "%02x", (unsigned char)sha[j]);
+        }
+        crc16 = crc16_ccitt(pagedata, PAGE_SIZE);
+        crc32 = crc32_hash(pagedata, PAGE_SIZE, 1);
+        get_filename(print_bio, filename);    
+        
+        
+        trace_io_fin(print_bio, filename, sha_hex, crc32, crc16, comments); 
+    }
+    return 0;
+free:
+    kfree(pagedata);
+end:
+    printk("alloc fail");
+    return -1;
+
+
+
+
+}
 // print ext4 journal descriptor block 
 
 /* if( *((unsigned char*)(vpp)) == 0xc0 &&
@@ -1142,25 +1217,21 @@ tmp_flag = *((unsigned int*) (vpp+ base +4));
 }*/
 
 
-int lzo_compress(struct page* p){
-    unsigned char *data = NULL;
+int lzo_compress(char *data, int len){
     unsigned char *wrkmem = NULL;
     unsigned char *dst_buf = NULL;
-    int in_len =4096, out_len = 0;
+    int out_len = 0;
     int ret = -1;
-    data =(unsigned char *) kmap_atomic(p);
-    if(data){
-        wrkmem = (unsigned char *) kmalloc(LZO1X_MEM_COMPRESS, GFP_ATOMIC);
-        dst_buf = (unsigned char *) kmalloc( lzo1x_worst_compress(4096), GFP_ATOMIC);
-        if(!wrkmem || !dst_buf) {
-            goto END;
-        }
-        ret = lzo1x_1_compress(data, in_len, dst_buf, &out_len, wrkmem);
+    wrkmem = (unsigned char *) kmalloc(LZO1X_MEM_COMPRESS, GFP_KERNEL);
+    dst_buf = (unsigned char *) kmalloc( lzo1x_worst_compress(4096), GFP_KERNEL);
+    if(!wrkmem || !dst_buf) {
+        goto END;
+    }
+    ret = lzo1x_1_compress(data, len, dst_buf, &out_len, wrkmem);
 END:
-        kfree((void *)dst_buf);
-        kfree((void *) wrkmem);
-        kunmap_atomic(data);
-    }    
+    /* kfree is NULL-safe */
+    kfree((void *)dst_buf);
+    kfree((void *) wrkmem);
     if(ret == LZO_E_OK)
         return out_len;
     return ret;

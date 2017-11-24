@@ -2,7 +2,7 @@ VERSION = 3
 PATCHLEVEL = 4
 SUBLEVEL = 0
 EXTRAVERSION =
-NAME = Saber-toothed Squirrel
+NAME = Saber-QAQ Squirrel
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
@@ -712,8 +712,11 @@ export mod_strip_cmd
 
 
 ifeq ($(KBUILD_EXTMOD),)
+ifdef CONFIG_TRACEBIO
+core-y		+= include/trace_bio/ kernel/ mm/ fs/ ipc/ security/ crypto/ block/
+else
 core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/
-
+endif
 vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
 		     $(net-y) $(net-m) $(libs-y) $(libs-m)))

@@ -41,6 +41,7 @@ enum
 #define SHA1HashSize 20
 
 
+
 typedef struct SHA1Context
 {
     unsigned int  Intermediate_Hash[SHA1HashSize/4]; /* Message Digest  */
@@ -184,12 +185,22 @@ static void print_page_inode(struct page *bio_page)
 }
 */
 
+
+
+
 void print_bio(struct bio *print_bio,int flag);
 void timespec_diff(struct timespec *start, struct timespec *stop, struct timespec *result);
 void init_bio_time(struct bio *bio);
 void print_bio2(struct bio *bio);
+
+
+#define RAW_BIO 1
+#define ENC_BIO 2
+
+int print_bio3(struct bio* print_bio, int flag);
 void get_filename(struct bio *print_bio, char* output);
+int get_page_data(struct page *p, char* output);
 ////////////////////////////////////////////////////////////
-int lzo_compress(struct page* p);
+int lzo_compress(char *data, int len);
 
 #endif
