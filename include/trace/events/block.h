@@ -225,6 +225,7 @@ TRACE_EVENT(block_bio_complete,
 		__field( unsigned,	nr_sector	)
 		__field( int,		error		)
 		__array( char,		rwbs,	RWBS_LEN)
+        __array( char, str, DNAME_INLINE_LEN )
 	),
 
 	TP_fast_assign(
@@ -233,6 +234,7 @@ TRACE_EVENT(block_bio_complete,
 		__entry->nr_sector	= bio->bi_size >> 9;
 		__entry->error		= error;
 		blk_fill_rwbs(__entry->rwbs, bio->bi_rw, bio->bi_size);
+        
 	),
 
 	TP_printk("%d,%d %s %llu + %u [%d]",
@@ -564,18 +566,70 @@ TRACE_EVENT(block_rq_remap,
 		  (unsigned long long)__entry->old_sector)
 );
 
-
-TRACE_EVENT( custom_string, 
-    TP_PROTO (char *str),
-    TP_ARGS(str),
+TRACE_EVENT( io_fin, 
+    TP_PROTO (struct bio *bio, char* filename, char* sha, unsigned long crc32, unsigned short crc16, char *comments),
+    TP_ARGS(bio, filename, sha, crc32, crc16, comments),
     TP_STRUCT__entry(
-    __array(char, string, DNAME_INLINE_LEN)
+        __array(char, filename, DNAME_INLINE_LEN)
+        __array(char, sha, 40  + 1)
+        __field(unsigned long, crc32)
+        __field(unsigned short, crc16)
+        __field(sector_t, sector)
+        __field(unsigned long, bi_rw)
+        __array(char, comments, 20 + 1 )
     ),
     TP_fast_assign(
-        memcpy(__entry->string, str, DNAME_INLINE_LEN);
+        memcpy(__entry->filename, filename, DNAME_INLINE_LEN);
+        memcpy(__entry->sha, sha, 40 + 1);
+        memcpy(__entry->comments, comments, 20 + 1);
+        __entry->crc32 = crc32;
+        __entry->crc16 = crc16;
+        __entry->sector = bio->bi_sector;
+        __entry->bi_rw = bio->bi_rw;
     ),
-    TP_printk("the string is %s\n", __entry->string)
+    TP_printk("FP:%c&%llu&%s&%s&%lu&%u&%s\n",
+    (__entry->bi_rw & WRITE) ? 'W' : 'R',  
+    __entry->sector,
+    __entry->filename, 
+    __entry->sha, 
+    __entry->crc32, 
+    __entry->crc16,
+    __entry->comments
+    )
 );
+/*
+TRACE_EVENT( io_sha_4, 
+    TP_PROTO (struct bio *bio, char* filename, char* sha, char *sha1, char* sha2, char *comments),
+    TP_ARGS(bio, filename, sha, crc32, crc16, comments),
+    TP_STRUCT__entry(
+        __array(char, filename, DNAME_INLINE_LEN)
+        __array(char, sha, 40  + 1)
+        __field(unsigned long, crc32)
+        __field(unsigned short, crc16)
+        __field(sector_t, sector)
+        __field(unsigned long, bi_rw)
+        __array(char, comments, 20 + 1 )
+    ),
+    TP_fast_assign(
+        memcpy(__entry->filename, filename, DNAME_INLINE_LEN);
+        memcpy(__entry->sha, sha, 40 + 1);
+        memcpy(__entry->comments, comments, 20 + 1);
+        __entry->crc32 = crc32;
+        __entry->crc16 = crc16;
+        __entry->sector = bio->bi_sector;
+        __entry->bi_rw = bio->bi_rw;
+    ),
+    TP_printk("FP:%c&%llu&%s&%s&%lu&%u&%s\n",
+    (__entry->bi_rw & WRITE) ? 'W' : 'R',  
+    __entry->sector,
+    __entry->filename, 
+    __entry->sha, 
+    __entry->crc32, 
+    __entry->crc16,
+    __entry->comments
+    )
+);
+*/
 #endif /* _TRACE_BLOCK_H */
 
 /* This part must be outside protection */
