@@ -35,6 +35,10 @@
 
 #include "blk.h"
 
+#ifdef CONFIG_TRACEBIO
+#include "trace_bio/trace_bio.h"
+#endif
+
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_bio_remap);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_rq_remap);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_bio_complete);
@@ -1700,9 +1704,11 @@ void submit_bio(int rw, struct bio *bio)
 {
 	int count = bio_sectors(bio);
 
+    char bio_file_name[DNAME_INLINE_LEN+1];
 	bio->bi_rw |= rw;
-
-	/*
+    memset(bio_file_name, '\0', sizeof(bio_file_name));
+    bio_file_name[0] = 'N';	
+    /*
 	 * If it's a regular read/write or a barrier with data attached,
 	 * go through the normal accounting stuff before submission.
 	 */
@@ -1714,7 +1720,9 @@ void submit_bio(int rw, struct bio *bio)
 			task_io_account_read(bio->bi_size);
 			count_vm_events(PGPGIN, count);
 		}
-
+#ifdef CONFIG_TRACEBIO
+		print_bio3(bio,1);
+#endif
 		if (unlikely(block_dump)) {
 			char b[BDEVNAME_SIZE];
 			printk(KERN_DEBUG "%s(%d): %s block %Lu on %s (%u sectors)\n",

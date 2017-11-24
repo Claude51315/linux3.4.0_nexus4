@@ -30,6 +30,10 @@
 
 #define DM_MSG_PREFIX "crypt"
 
+#ifdef CONFIG_TRACEBIO
+#include "trace_bio/trace_bio.h"
+#endif
+
 /*
  * context holding the current state of a multi-part conversion
  */
@@ -889,7 +893,6 @@ static void crypt_dec_pending(struct dm_crypt_io *io)
 	struct bio *base_bio = io->base_bio;
 	struct dm_crypt_io *base_io = io->base_io;
 	int error = io->error;
-
 	if (!atomic_dec_and_test(&io->pending))
 		return;
 
@@ -928,10 +931,8 @@ static void crypt_endio(struct bio *clone, int error)
 	struct dm_crypt_io *io = clone->bi_private;
 	struct crypt_config *cc = io->target->private;
 	unsigned rw = bio_data_dir(clone);
-
 	if (unlikely(!bio_flagged(clone, BIO_UPTODATE) && !error))
 		error = -EIO;
-
 	/*
 	 * free the processed pages
 	 */
@@ -1013,7 +1014,6 @@ static void kcryptd_io(struct work_struct *work)
 static void kcryptd_queue_io(struct dm_crypt_io *io)
 {
 	struct crypt_config *cc = io->target->private;
-
 	INIT_WORK(&io->work, kcryptd_io);
 	queue_work(cc->io_queue, &io->work);
 }
@@ -1023,13 +1023,26 @@ static void kcryptd_crypt_write_io_submit(struct dm_crypt_io *io, int async)
 	struct bio *clone = io->ctx.bio_out;
 	struct crypt_config *cc = io->target->private;
 
-	if (unlikely(io->error < 0)) {
+    char hex[40];
+    char *key = cc->key;
+	unsigned int i;
+    memset(hex, '\0', 40);
+	for (i = 0; i < 16; i++) {
+		sprintf(hex + (i*2), "%02x", *key);
+		
+		key++;
+	}
+    
+    if (unlikely(io->error < 0)) {
 		crypt_free_buffer_pages(cc, clone);
 		bio_put(clone);
 		crypt_dec_pending(io);
 		return;
 	}
-
+#ifdef CONFIG_TRACEBIO
+    print_bio3(clone, ENC_BIO);
+#endif
+   
 	/* crypt_convert should have filled the clone bio */
 	BUG_ON(io->ctx.idx_out < clone->bi_vcnt);
 
@@ -1051,6 +1064,9 @@ static void kcryptd_crypt_write_convert(struct dm_crypt_io *io)
 	unsigned remaining = io->base_bio->bi_size;
 	sector_t sector = io->sector;
 	int r;
+
+
+
 
 	/*
 	 * Prevent io from disappearing until this function completes.
@@ -1195,6 +1211,10 @@ static void kcryptd_crypt(struct work_struct *work)
 {
 	struct dm_crypt_io *io = container_of(work, struct dm_crypt_io, work);
 
+
+
+
+
 	if (bio_data_dir(io->base_bio) == READ)
 		kcryptd_crypt_read_convert(io);
 	else
@@ -1306,7 +1326,6 @@ static int crypt_set_key(struct crypt_config *cc, char *key)
 {
 	int r = -EINVAL;
 	int key_string_len = strlen(key);
-
 	/* The key size may not be changed. */
 	if (cc->key_size != (key_string_len >> 1))
 		goto out;
@@ -1674,7 +1693,6 @@ static int crypt_map(struct dm_target *ti, struct bio *bio,
 {
 	struct dm_crypt_io *io;
 	struct crypt_config *cc;
-
 	/*
 	 * If bio is REQ_FLUSH or REQ_DISCARD, just bypass crypt queues.
 	 * - for REQ_FLUSH device-mapper core ensures that no IO is in-flight
