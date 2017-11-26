@@ -63,6 +63,8 @@ struct bio {
 
 	struct bio_vec		*bi_io_vec;	/* the actual vec list */
 
+    bio_end_io_t        *bi_end_io_tmp;
+
 	bio_end_io_t		*bi_end_io;
 
 	void			*bi_private;

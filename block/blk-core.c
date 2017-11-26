@@ -1700,6 +1700,14 @@ EXPORT_SYMBOL(generic_make_request);
  * interfaces; @bio must be presetup and ready for I/O.
  *
  */
+#ifdef CONFIG_TRACEBIO
+void jprobe_end_io_t(struct bio *bio, int error)
+{
+    printk("QAQ\n");
+    bio->bi_end_io_tmp(bio,error);
+}
+EXPORT_SYMBOL(jprobe_end_io_t);
+#endif
 void submit_bio(int rw, struct bio *bio)
 {
 	int count = bio_sectors(bio);
@@ -1721,7 +1729,11 @@ void submit_bio(int rw, struct bio *bio)
 			count_vm_events(PGPGIN, count);
 		}
 #ifdef CONFIG_TRACEBIO
-		print_bio3(bio,1);
+		bio->bi_end_io_tmp = bio->bi_end_io;
+        bio->bi_end_io = jprobe_end_io_t;
+
+        print_bio3(bio,1);
+        //printk("query result : %d\n", query_module("hello"));
 #endif
 		if (unlikely(block_dump)) {
 			char b[BDEVNAME_SIZE];
